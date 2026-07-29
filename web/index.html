@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Project Sekai Q版小人编辑器</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">PERSONAL LOCAL TOOL</p>
+      <h1>Project Sekai Q版小人编辑器</h1>
+    </div>
+    <p class="top-note">官方 Spine 小人实时渲染 · PNG / GIF 导出</p>
+  </header>
+
+  <main class="layout">
+    <section class="panel controls" aria-label="编辑选项">
+      <div class="control-group">
+        <label for="character">角色</label>
+        <select id="character"></select>
+        <p id="character-status" class="helper">首次选中角色时会缓存官方骨骼描述。</p>
+      </div>
+
+      <div id="costume-group" class="control-group hidden">
+        <label for="costume">服装</label>
+        <select id="costume" disabled></select>
+        <p id="costume-status" class="helper"></p>
+      </div>
+
+      <div id="component-group" class="control-group hidden">
+        <label>可叠加配件</label>
+        <label class="toggle-row" for="cross-rig-mode">
+          <input id="cross-rig-mode" type="checkbox">
+          <span>跨骨骼模式（实验）</span>
+        </label>
+        <p class="helper">开启后可从同一运行家族的其他角色服装选择同名部位；衣服主体和腿 / 鞋会以完整网格套装显示，体型差异仍可能出现穿模或露出原手脚。</p>
+        <div id="component-options" class="component-options" aria-live="polite"></div>
+        <button id="reset-components" type="button" class="subtle component-reset" disabled>恢复全部组件</button>
+        <p id="component-status" class="helper"></p>
+      </div>
+
+      <div class="control-group">
+        <label for="action">动作</label>
+        <select id="action" disabled></select>
+        <p class="helper">只显示与当前角色体型匹配的真实动作。</p>
+      </div>
+
+      <div class="control-group expression-grid">
+        <label>表情</label>
+        <div class="expression-row">
+          <span>眼睛</span><select id="eyes" disabled></select>
+        </div>
+        <div class="expression-row">
+          <span>眉毛</span><select id="brows" disabled></select>
+        </div>
+        <div class="expression-row">
+          <span>嘴巴</span><select id="mouth" disabled></select>
+        </div>
+        <div class="expression-row">
+          <span>脸颊</span><select id="cheeks" disabled></select>
+        </div>
+        <div class="expression-row">
+          <span>特效</span><select id="effect" disabled></select>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label for="background">背景</label>
+        <div class="background-row">
+          <input id="background" type="color" value="#fff8fb">
+          <label class="toggle-row" for="transparent">
+            <input id="transparent" type="checkbox">
+            <span>纯透明底</span>
+          </label>
+        </div>
+        <p class="helper">开启后，预览和 PNG / GIF 导出都会使用透明底。GIF 的边缘为二值透明。</p>
+      </div>
+
+      <div class="control-group">
+        <label for="gif-fps">GIF 帧率</label>
+        <select id="gif-fps" disabled>
+          <option value="10">10 fps</option>
+          <option value="15">15 fps</option>
+          <option value="20">20 fps</option>
+          <option value="24" selected>24 fps</option>
+          <option value="30">30 fps</option>
+        </select>
+        <p class="helper">按当前动作导出，最长 4 秒，最高 120 帧。</p>
+      </div>
+
+      <div class="control-group transform-group">
+        <label for="scale">大小 <output id="scale-value">100%</output></label>
+        <input id="scale" type="range" min="55" max="155" value="100">
+        <label for="offset-y">上下 <output id="offset-y-value">0</output></label>
+        <input id="offset-y" type="range" min="-180" max="180" value="0">
+      </div>
+    </section>
+
+    <section class="workspace" aria-label="小人预览">
+      <div class="stage-shell">
+        <canvas id="stage" width="768" height="768" aria-label="Q版小人预览"></canvas>
+        <div id="loading" class="loading">正在准备官方 Spine 小人...</div>
+      </div>
+      <div class="workspace-actions">
+        <button id="download-png" type="button" class="primary" disabled>导出 PNG</button>
+        <button id="download-gif" type="button" disabled>导出 GIF（当前动作）</button>
+      </div>
+      <p id="export-status" class="export-status" aria-live="polite"></p>
+    </section>
+
+    <aside class="panel quick-actions" aria-label="快捷预设">
+      <h2>快捷预设</h2>
+      <button type="button" data-preset="default">默认站姿</button>
+      <button type="button" data-preset="talk">说话</button>
+      <button type="button" data-preset="happy">开心</button>
+      <button type="button" data-preset="surprise">惊讶</button>
+      <button type="button" data-preset="sad">难过</button>
+      <hr>
+      <h2>说明</h2>
+      <p>如有意见或建议欢迎进群1039266754交流</p>
+    </aside>
+  </main>
+
+  <footer>作者：米亁&nbsp;&nbsp;素材版权归原权利人所有；请仅在个人本地创作中使用</footer>
+
+  <script src="vendor/pixi-7.4.2.js"></script>
+  <script src="vendor/spine-pixi-4.1.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

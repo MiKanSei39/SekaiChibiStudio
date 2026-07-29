@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Local editor output and browser test state
+exports/
+runtime/
+.playwright-cli/
+
+# PyInstaller output
+build/
+release/
+dist/
+
+# Official Project Sekai resources are a local personal-use cache.
+assets/*
+!assets/README.md
+
+# User-provided / experimental image material must remain local.
+resources/
+web/favicon.ico
+
+# Operating-system and editor files
+.DS_Store
+Thumbs.db
+.vscode/

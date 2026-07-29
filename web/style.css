@@ -1,0 +1,167 @@
+:root {
+  color-scheme: light;
+  --ink: #392b45;
+  --muted: #806e8e;
+  --surface: rgba(255, 255, 255, 0.88);
+  --line: #ecd9ed;
+  --accent: #7b4ba4;
+  --accent-dark: #5d337f;
+  --canvas: #fff8fb;
+  --preview-sticky-top: 16px;
+  font-family: "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 5% 12%, rgba(255, 206, 229, 0.72), transparent 27rem),
+    radial-gradient(circle at 94% 3%, rgba(202, 222, 255, 0.8), transparent 30rem),
+    #f7f0f8;
+}
+button, select, input { font: inherit; }
+button { cursor: pointer; }
+button:disabled, select:disabled { cursor: wait; opacity: .56; }
+
+.topbar {
+  min-height: 105px;
+  padding: 20px clamp(22px, 5vw, 72px);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  border-bottom: 1px solid rgba(123, 75, 164, .14);
+  background: rgba(255, 255, 255, .58);
+  backdrop-filter: blur(12px);
+}
+h1, h2, p { margin: 0; }
+h1 { font-size: clamp(22px, 2.6vw, 32px); letter-spacing: .025em; }
+h2 { font-size: 15px; margin-bottom: 10px; }
+.eyebrow { color: #a76f9a; font-weight: 700; font-size: 10px; letter-spacing: .17em; margin-bottom: 4px; }
+.top-note { color: var(--muted); font-size: 13px; text-align: right; }
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(245px, 310px) minmax(390px, 1fr) minmax(190px, 240px);
+  gap: 18px;
+  max-width: 1510px;
+  margin: 0 auto;
+  padding: 24px clamp(16px, 3vw, 48px) 34px;
+  align-items: start;
+}
+.panel {
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: 0 12px 35px rgba(88, 48, 102, .06);
+}
+.control-group { padding: 0 0 17px; margin: 0 0 17px; border-bottom: 1px dashed var(--line); }
+.control-group:last-child { padding-bottom: 0; margin-bottom: 0; border-bottom: 0; }
+.hidden { display: none !important; }
+label { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; font-weight: 700; margin-bottom: 7px; }
+select, .subtle {
+  width: 100%; min-height: 37px; padding: 7px 10px; border: 1px solid #dac9e1;
+  border-radius: 10px; background: #fff; color: var(--ink);
+}
+select:focus, input:focus-visible, button:focus-visible { outline: 3px solid rgba(125, 82, 172, .26); outline-offset: 2px; }
+.helper { color: var(--muted); font-size: 11px; line-height: 1.45; margin-top: 6px; }
+.component-options { display: grid; gap: 7px; }
+.test-component-options { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.component-row { display: grid; grid-template-columns: 82px minmax(0, 1fr); align-items: center; gap: 8px; margin: 0; font-weight: 400; }
+.component-row span { color: var(--muted); font-size: 12px; }
+.component-row select { min-width: 0; min-height: 33px; padding-block: 5px; }
+.component-reset { margin-top: 8px; }
+.expression-row { display: grid; grid-template-columns: 43px 1fr; align-items: center; gap: 8px; margin: 6px 0; }
+.expression-row span { color: var(--muted); font-size: 12px; }
+.expression-row select { min-height: 33px; padding-block: 5px; }
+.background-row { display: grid; grid-template-columns: 45px 1fr; gap: 8px; }
+input[type="color"] { width: 45px; height: 37px; padding: 3px; border: 1px solid #dac9e1; border-radius: 10px; background: #fff; }
+.toggle-row {
+  min-height: 37px; margin: 0; padding: 7px 10px; display: flex; align-items: center; justify-content: flex-start; gap: 8px;
+  border: 1px solid #dac9e1; border-radius: 10px; background: #fff; color: var(--ink); font-size: 13px; font-weight: 400;
+}
+.toggle-row input[type="checkbox"] {
+  appearance: none; width: 34px; height: 20px; flex: 0 0 34px; margin: 0; border: 1px solid #c9b2d7; border-radius: 999px;
+  background: #eee6f2; cursor: pointer; position: relative; transition: background .15s ease, border-color .15s ease;
+}
+.toggle-row input[type="checkbox"]::after {
+  content: ""; position: absolute; width: 14px; height: 14px; top: 2px; left: 2px; border-radius: 50%; background: #fff;
+  box-shadow: 0 1px 2px rgba(57, 43, 69, .22); transition: transform .15s ease;
+}
+.toggle-row input[type="checkbox"]:checked { border-color: var(--accent); background: var(--accent); }
+.toggle-row input[type="checkbox"]:checked::after { transform: translateX(14px); }
+.subtle { text-align: left; }
+.transform-group input[type="range"] { width: 100%; accent-color: var(--accent); margin: 0 0 12px; }
+output { color: var(--accent); }
+
+.workspace { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.stage-shell {
+  position: relative;
+  width: min(100%, 768px);
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid #ebdce8;
+  border-radius: 28px;
+  box-shadow: 0 20px 50px rgba(91, 53, 100, .13);
+  background-color: var(--canvas);
+  background-image: linear-gradient(45deg, rgba(174, 132, 194, .06) 25%, transparent 25%), linear-gradient(-45deg, rgba(174, 132, 194, .06) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(174, 132, 194, .06) 75%), linear-gradient(-45deg, transparent 75%, rgba(174, 132, 194, .06) 75%);
+  background-size: 32px 32px;
+  background-position: 0 0, 0 16px, 16px -16px, -16px 0;
+}
+.stage-shell.transparent-preview {
+  background-color: #fff;
+  background-image: conic-gradient(#e3e3e3 25%, #fff 0 50%, #e3e3e3 0 75%, #fff 0);
+  background-position: 0 0;
+  background-size: 24px 24px;
+}
+/* Pixi writes inline CSS dimensions; override them so a narrower workspace
+   scales the preview instead of cropping the fixed 768px canvas. */
+canvas { display: block; width: 100% !important; height: 100% !important; }
+.loading {
+  position: absolute; inset: 0; display: grid; place-items: center; padding: 35px;
+  text-align: center; color: var(--accent-dark); font-weight: 700; background: rgba(255, 248, 251, .7);
+}
+.loading.hidden { display: none; }
+.workspace-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 16px; }
+.workspace-actions button, .quick-actions button {
+  border: 1px solid #d8c5e3; border-radius: 11px; padding: 9px 14px; background: #fff; color: var(--accent-dark); font-weight: 700;
+}
+.workspace-actions .primary { border-color: var(--accent); color: #fff; background: var(--accent); }
+.workspace-actions .primary:hover { background: var(--accent-dark); }
+.export-status { min-height: 20px; margin-top: 10px; color: var(--muted); font-size: 12px; text-align: center; }
+.quick-actions { display: grid; align-content: start; gap: 8px; }
+.quick-actions h2:not(:first-child) { margin-top: 14px; }
+.quick-actions button { text-align: left; }
+.quick-actions button:hover { background: #faf3ff; border-color: var(--accent); }
+.quick-actions p { color: var(--muted); font-size: 12px; line-height: 1.55; }
+hr { width: 100%; border: 0; border-top: 1px dashed var(--line); margin: 8px 0; }
+footer { padding: 0 24px 30px; color: #927e96; font-size: 11px; text-align: center; }
+
+@media (max-width: 1050px) {
+  .layout { grid-template-columns: minmax(245px, 310px) minmax(390px, 1fr); }
+  .quick-actions { grid-column: 1 / -1; grid-template-columns: repeat(5, 1fr); }
+  .quick-actions h2, .quick-actions p, .quick-actions hr { grid-column: 1 / -1; }
+}
+@media (min-width: 721px) {
+  /* Stretch the grid row to the editor's full height, then pin only the
+     square preview.  Pinning the whole workspace would stop early because its
+     export controls make it taller than the canvas. */
+  .layout { align-items: stretch; }
+  .workspace { align-self: stretch; justify-content: flex-start; }
+  .stage-shell {
+    position: sticky; top: var(--preview-sticky-top); z-index: 1; align-self: center;
+    width: min(100%, 768px, calc(100vh - 32px));
+  }
+  /* Keep export controls clickable when the sticky preview overlaps the row. */
+  .workspace-actions, .export-status { position: relative; z-index: 2; }
+}
+@media (max-width: 720px) {
+  .topbar { align-items: flex-start; flex-direction: column; }
+  .top-note { text-align: left; }
+  .layout { grid-template-columns: 1fr; padding: 15px; }
+  .controls { order: 2; }
+  .workspace { order: 1; }
+  .quick-actions { order: 3; grid-template-columns: repeat(2, 1fr); }
+}
