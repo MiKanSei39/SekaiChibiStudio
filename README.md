@@ -38,8 +38,7 @@ python start.py
 打包版可直接双击发行目录中的 EXE，无需另装 Python。它只读取包内的
 `web/` 与 `assets/` 官方缓存；GIF 导出和临时帧会写入
 `%LOCALAPPDATA%\ProjectSekaiChibiStudio\exports` 与
-`%LOCALAPPDATA%\ProjectSekaiChibiStudio\runtime`，不会改写安装目录。打包版
-缺少官方资源时会报错，不会向安装目录下载或补入资源。
+`%LOCALAPPDATA%\ProjectSekaiChibiStudio\runtime`
 
 ## 当前功能
 
@@ -49,7 +48,6 @@ python start.py
   选择同一骨骼家族中经验证能映射的官方组件
 - 在实验模式中，可单独选择完整的“衣服主体”或“腿部 / 鞋”官方层组；它们
   保留相互关联的 Mesh 与 Region 层，不会拆成容易错位的散装衣片
-- 初音未来的 Leo/need 官方单位服会明确标注，绝不会冒充魔法未来 2019
 - 按角色体型过滤的官方真实动作
 - 眼睛、眉毛、嘴巴、脸颊和特效切换
 - 背景色、纯透明底、缩放和上下位置；实时预览在桌面浏览器滚动编辑时保持居中可见
@@ -63,8 +61,7 @@ python start.py
 
 组件替换只会显示官方部件。即使开启“跨骨骼模式”，来源和当前服装仍必须属于
 同一运行时家族、不是反向版本，并通过同名槽位、同名骨骼、骨骼布局和动画后
-逐帧覆盖检查；它
-不是任意混搭开关。普通头颈配件仍只接受真实的可见 `RegionAttachment`。衣服
+逐帧覆盖检查；普通头颈配件仍只接受真实的可见 `RegionAttachment`。衣服
 主体和腿部 / 鞋是实验模式的唯一 Mesh 例外，必须通过完整层组和骨骼布局检查才
 会显示，且可能因不同角色体型产生轻微穿模或露出原手脚。自定义素材和测试挂坠
 已不再在编辑器中暴露。魔法未来 2019 没有可直接复用的官方 Project Sekai Spine
