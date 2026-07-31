@@ -4,17 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta name="description" content="Project Sekai Chibi Studio static web edition for GitHub Pages">
-  <title>Project Sekai Chibi Studio Web | 世界计划 Q版小人编辑器</title>
+  <meta name="description" content="PJSKchibi · Project Sekai Q版小人编辑器 for GitHub Pages">
+  <title>PJSKchibi | Project Sekai Q版小人编辑器</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <span class="brand-mark" aria-hidden="true">PS</span>
-      <div>
-        <p class="eyebrow">GITHUB PAGES EDITION / 网页版</p>
-        <h1>Project Sekai Chibi Studio <span>世界计划 Q版小人编辑器</span></h1>
+      <span class="brand-mark" aria-label="PJSKchibi">PJSK</span>
+      <div class="brand-copy">
+        <p class="eyebrow">PJSKCHIBI / GITHUB PAGES</p>
+        <h1>PJSKchibi <span>Project Sekai Q版小人编辑器</span></h1>
       </div>
     </div>
     <span id="origin-state" class="state-pill">正在启动 / Starting</span>
@@ -23,7 +23,7 @@
   <main class="workspace">
     <aside class="sidebar" aria-label="网页版设置">
       <section>
-        <p class="section-label">角色与动作 / Character</p>
+        <p class="section-label">角色 / Character</p>
         <label for="character">角色 / Character</label>
         <select id="character" disabled></select>
       </section>
@@ -67,7 +67,7 @@
         <input id="offset-y" type="range" min="-180" max="180" value="0">
       </section>
       <section class="source-section">
-        <p class="section-label">资源来源 / Asset source</p>
+        <p class="section-label">导出与连接 / Export & Source</p>
         <code id="asset-origin"></code>
         <label for="gif-fps">GIF 帧率 / GIF FPS</label>
         <select id="gif-fps" disabled>
@@ -77,13 +77,20 @@
           <option value="24" selected>24 fps</option>
           <option value="30">30 fps</option>
         </select>
-        <button id="check-source" type="button">检查连接 / Check connection</button>
-        <button id="download-png" type="button" disabled>下载 PNG / Download PNG</button>
-        <button id="download-gif" type="button" disabled>下载 GIF / Download GIF</button>
+        <button id="check-source" class="primary-button" type="button">检查连接 / Check connection</button>
+        <button id="download-png" class="secondary-button" type="button" disabled>下载 PNG / Download PNG</button>
+        <button id="download-gif" class="secondary-button" type="button" disabled>下载 GIF / Download GIF</button>
       </section>
     </aside>
 
     <section class="canvas-area" aria-label="小人预览">
+      <div class="preview-heading">
+        <div>
+          <p class="section-label">LIVE PREVIEW / 实时预览</p>
+          <h2>角色舞台 <span>Spine motion stage</span></h2>
+        </div>
+        <span class="preview-size">768 × 768</span>
+      </div>
       <div class="preview-grid">
         <canvas id="stage" width="768" height="768" aria-label="Q版小人预览"></canvas>
         <div class="preview-status">
