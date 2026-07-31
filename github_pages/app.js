@@ -939,6 +939,21 @@
     return new Promise((resolve) => requestAnimationFrame(resolve));
   }
 
+  function normalizeGifPalette(palette, transparent) {
+    if (!transparent) return { palette, transparentIndex: -1 };
+    const normalized = palette.slice();
+    const transparentIndex = normalized.findIndex((color) => color.length === 4 && color[3] === 0);
+    if (transparentIndex >= 0) {
+      const [clear] = normalized.splice(transparentIndex, 1);
+      normalized.unshift(clear);
+    } else {
+      // Keep a deterministic transparent entry even if the sampled frames had no clear pixels.
+      normalized.unshift([0, 0, 0, 0]);
+      if (normalized.length > 256) normalized.pop();
+    }
+    return { palette: normalized, transparentIndex: 0 };
+  }
+
   async function downloadGif() {
     if (!state.current || state.loading) return;
     const current = state.current;
@@ -947,7 +962,10 @@
     const duration = Math.min(action.duration || 0, 4);
     const frameCount = duration > 0 ? Math.min(120, Math.max(2, Math.ceil(duration * fps))) : 1;
     const resumeAt = current.entry?.trackTime || 0;
+    const ticker = state.app?.ticker;
+    const tickerWasStarted = Boolean(ticker?.started);
     setBusy(true);
+    if (tickerWasStarted) ticker.stop();
     try {
       const { GIFEncoder, quantize, applyPalette } = await loadGifEncoder();
       const encoder = GIFEncoder();
@@ -957,21 +975,39 @@
       const context = frameCanvas.getContext("2d", { willReadFrequently: true });
       const paletteFormat = state.transparent ? "rgba4444" : "rgb565";
       const delay = Math.round(1000 / fps);
+
+      const captureFrame = () => {
+        context.clearRect(0, 0, GIF_SIZE, GIF_SIZE);
+        context.drawImage(dom.canvas, 0, 0, GIF_SIZE, GIF_SIZE);
+        return new Uint8ClampedArray(context.getImageData(0, 0, GIF_SIZE, GIF_SIZE).data);
+      };
+
+      // A global palette keeps stable colors and one transparent index across frames.
+      const sampleCount = Math.min(8, frameCount);
+      const frameBytes = GIF_SIZE * GIF_SIZE * 4;
+      const palettePixels = new Uint8ClampedArray(sampleCount * frameBytes);
+      for (let sample = 0; sample < sampleCount; sample += 1) {
+        const index = sampleCount === 1
+          ? 0
+          : Math.round(sample * (frameCount - 1) / (sampleCount - 1));
+        seekCurrent(duration > 0 ? index / fps : 0);
+        renderNow();
+        palettePixels.set(captureFrame(), sample * frameBytes);
+      }
+      dom.result.textContent = "正在准备 GIF 调色板 / Preparing GIF palette";
+      const quantizedPalette = quantize(palettePixels, 256, state.transparent
+          ? { format: paletteFormat, oneBitAlpha: 127, clearAlpha: true, clearAlphaThreshold: 127 }
+          : { format: paletteFormat });
+      const { palette, transparentIndex } = normalizeGifPalette(quantizedPalette, state.transparent);
+
       for (let index = 0; index < frameCount; index += 1) {
         seekCurrent(duration > 0 ? index / fps : 0);
         renderNow();
-        context.clearRect(0, 0, GIF_SIZE, GIF_SIZE);
-        context.drawImage(dom.canvas, 0, 0, GIF_SIZE, GIF_SIZE);
-        const pixels = context.getImageData(0, 0, GIF_SIZE, GIF_SIZE).data;
-        const palette = quantize(pixels, 256, state.transparent
-          ? { format: paletteFormat, oneBitAlpha: 127, clearAlpha: true, clearAlphaThreshold: 127 }
-          : { format: paletteFormat });
-        const indexed = applyPalette(pixels, palette, paletteFormat);
-        const transparentIndex = state.transparent
-          ? palette.findIndex((color) => color.length === 4 && color[3] === 0)
-          : -1;
+        const indexed = applyPalette(captureFrame(), palette, paletteFormat);
         encoder.writeFrame(indexed, GIF_SIZE, GIF_SIZE, {
-          palette, delay, repeat: 0, dispose: 2,
+          ...(index === 0 ? { palette, repeat: 0 } : {}),
+          delay,
+          dispose: state.transparent ? 2 : 0,
           transparent: transparentIndex >= 0, transparentIndex,
         });
         dom.result.textContent = `正在生成 GIF：${index + 1} / ${frameCount}`;
@@ -987,6 +1023,7 @@
     } finally {
       seekCurrent(resumeAt);
       renderNow();
+      if (tickerWasStarted) ticker.start();
       setBusy(false);
     }
   }
