@@ -1,0 +1,16 @@
+.DS_Store
+Thumbs.db
+.vscode/
+.playwright-cli/
+node_modules/
+dist/
+
+# Local downloads and export state
+assets/
+exports/
+runtime/
+tmp/
+release/
+_internal/
+*.exe
+*.zip
