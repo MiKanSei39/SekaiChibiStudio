@@ -87,6 +87,7 @@ output { float: right; color: var(--muted); font-weight: 400; }
 .preview-status.ok .signal { border-color: var(--teal); }
 .preview-status.fail .signal { border-color: var(--warning); }
 .status-bar { display: flex; justify-content: space-between; gap: 16px; color: var(--muted); font-size: 13px; }
+.community-note { color: var(--accent); font-weight: 650; text-align: center; }
 
 @media (max-width: 720px) {
   .topbar { align-items: flex-start; }
