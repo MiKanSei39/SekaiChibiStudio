@@ -6,6 +6,7 @@
   const SIZE = 768;
   const GIF_SIZE = 512;
   const GIFENC_URL = "https://cdn.jsdelivr.net/npm/gifenc@1.0.3/+esm";
+  const SKELETON_CHUNK_SIZE = 1024 * 1024;
   const DEFAULT = "__default";
   const NONE = "__none";
   const LEGACY_PREFIX = "area_sd/sd_main/";
@@ -70,7 +71,12 @@
       ? assetUrl(`${V2_PREFIX}v2_base_model/v2_sd_main.skel`)
       : assetUrl(`${LEGACY_PREFIX}base_model/sd_main.skel`);
   }
-  function probeUrl() { return skeletonUrl("legacy"); }
+  function probeUrl() {
+    const url = new URL(skeletonUrl("legacy"));
+    // Avoid a stale CDN/proxy response while keeping the real asset URL cacheable.
+    url.searchParams.set("probe", Date.now().toString());
+    return url.href;
+  }
 
   function option(select, value, label) {
     const item = document.createElement("option");
@@ -104,14 +110,18 @@
   }
 
   async function fetchJson(path) {
-    const response = await fetch(`${config.catalogOrigin}/${path}`, { mode: "cors", cache: "no-store" });
+    const response = await fetch(`${config.catalogOrigin}/${path}`, {
+      mode: "cors", credentials: "omit", referrerPolicy: "no-referrer", cache: "no-store",
+    });
     if (!response.ok) throw new Error(`${path} HTTP ${response.status}`);
     return response.json();
   }
 
   async function listBundles(prefix) {
     const query = new URLSearchParams({ prefix, delimiter: "/" });
-    const response = await fetch(`${config.assetOrigin}/?${query}`, { mode: "cors", cache: "no-store" });
+    const response = await fetch(`${config.assetOrigin}/?${query}`, {
+      mode: "cors", credentials: "omit", referrerPolicy: "no-referrer", cache: "no-store",
+    });
     if (!response.ok) throw new Error(`Asset listing HTTP ${response.status}`);
     const xml = new DOMParser().parseFromString(await response.text(), "application/xml");
     return new Set([...xml.getElementsByTagName("Prefix")]
@@ -685,25 +695,77 @@
 
   async function checkSource() {
     dom.check.disabled = true;
-      dom.result.textContent = "正在检查资源连接 / Checking source…";
+    dom.result.textContent = "正在检查资源连接 / Checking source…";
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
     try {
-      const response = await fetch(probeUrl(), { method: "HEAD", mode: "cors", cache: "no-store" });
+      // Some browser proxies reject cross-origin HEAD even though the GET used by
+      // the renderer is allowed. A single-byte GET verifies the real code path
+      // without downloading the entire skeleton.
+      const response = await fetch(probeUrl(), {
+        mode: "cors",
+        credentials: "omit",
+        referrerPolicy: "no-referrer",
+        cache: "no-store",
+        headers: { Range: "bytes=0-0" },
+        signal: controller.signal,
+      });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      response.body?.cancel().catch(() => {});
       dom.result.textContent = `资源连接正常 / Source reachable: ${response.status} ${response.statusText || "OK"}`;
     } catch (error) {
-      dom.result.textContent = `资源连接失败 / Source blocked: ${error.message}`;
+      const detail = error?.name === "AbortError"
+        ? "请求超时 / Request timed out"
+        : error?.message || "Network request failed";
+      dom.result.textContent = `资源连接失败 / Source blocked: ${detail}`;
     } finally {
+      window.clearTimeout(timeout);
       dom.check.disabled = state.loading;
     }
   }
 
   async function fetchSkeleton(family) {
     if (state.skeletons.has(family)) return state.skeletons.get(family);
-    const response = await fetch(skeletonUrl(family), { mode: "cors" });
-    if (!response.ok) throw new Error(`Skeleton HTTP ${response.status}`);
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    state.skeletons.set(family, bytes);
-    return bytes;
+    const url = new URL(skeletonUrl(family));
+    url.searchParams.set("range", "1");
+    const chunks = [];
+    let offset = 0;
+
+    // The official skeletons are several megabytes. Fetching them in bounded
+    // ranges avoids failures from browser proxies that stall large responses.
+    for (let attempt = 0; attempt < 64; attempt += 1) {
+      const end = offset + SKELETON_CHUNK_SIZE - 1;
+      const response = await fetch(url.href, {
+        mode: "cors",
+        credentials: "omit",
+        referrerPolicy: "no-referrer",
+        cache: "no-store",
+        headers: { Range: `bytes=${offset}-${end}` },
+      });
+      if (response.status === 416 && chunks.length) break;
+      if (!response.ok) throw new Error(`Skeleton HTTP ${response.status}`);
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (response.status === 200) {
+        state.skeletons.set(family, bytes);
+        return bytes;
+      }
+      if (response.status !== 206 || bytes.length === 0) {
+        throw new Error(`Skeleton range HTTP ${response.status}`);
+      }
+      chunks.push(bytes);
+      offset += bytes.length;
+      if (bytes.length < SKELETON_CHUNK_SIZE) break;
+    }
+
+    if (!chunks.length) throw new Error("Skeleton response was empty");
+    const combined = new Uint8Array(offset);
+    let cursor = 0;
+    for (const chunk of chunks) {
+      combined.set(chunk, cursor);
+      cursor += chunk.length;
+    }
+    state.skeletons.set(family, combined);
+    return combined;
   }
 
   async function loadTexture(url, pma) {
@@ -751,7 +813,9 @@
       if (!window.PIXI || !window.spine) throw new Error("浏览器运行时未加载 / The browser runtime did not load");
       const [skeletonBytes, atlasText] = await Promise.all([
         fetchSkeleton(costume.family),
-        fetch(costumeUrl(costume, "sekai_atlas.atlas.txt"), { mode: "cors" }).then((response) => {
+        fetch(costumeUrl(costume, "sekai_atlas.atlas.txt"), {
+          mode: "cors", credentials: "omit", referrerPolicy: "no-referrer",
+        }).then((response) => {
           if (!response.ok) throw new Error(`Atlas HTTP ${response.status}`);
           return response.text();
         }),
