@@ -33,9 +33,10 @@ body {
 }
 
 .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.brand > div { min-width: 0; }
 .brand-mark { width: 38px; height: 38px; display: grid; place-items: center; flex: 0 0 auto; color: #fff; background: var(--teal); font-weight: 700; font-size: 13px; }
 .eyebrow, .section-label { margin: 0; color: var(--muted); font-size: 12px; letter-spacing: 0; }
-h1 { margin: 2px 0 0; font-size: 20px; line-height: 1.2; font-weight: 700; }
+h1 { margin: 2px 0 0; font-size: 20px; line-height: 1.2; font-weight: 700; overflow-wrap: anywhere; }
 h1 span { color: var(--muted); font-size: 13px; font-weight: 400; }
 
 .state-pill { padding: 7px 10px; border: 1px solid var(--line); color: var(--muted); font-size: 13px; white-space: nowrap; }
@@ -90,7 +91,9 @@ output { float: right; color: var(--muted); font-weight: 400; }
 .community-note { color: var(--accent); font-weight: 650; text-align: center; }
 
 @media (max-width: 720px) {
-  .topbar { align-items: flex-start; }
+  .topbar { align-items: flex-start; flex-wrap: wrap; }
+  .brand { flex: 0 0 100%; }
+  .state-pill { margin-left: auto; }
   .state-pill { font-size: 12px; }
   .workspace { grid-template-columns: 1fr; }
   .sidebar { border-right: 0; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
