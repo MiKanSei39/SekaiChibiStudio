@@ -53,6 +53,7 @@
     crossRigMode: document.querySelector("#cross-rig-mode"), resetComponents: document.querySelector("#reset-components"), componentStatus: document.querySelector("#component-status"),
     result: document.querySelector("#check-result"), state: document.querySelector("#origin-state"), status: document.querySelector(".preview-status"),
     title: document.querySelector("#preview-title"), detail: document.querySelector("#preview-detail"), canvas: document.querySelector("#stage"),
+    previewGrid: document.querySelector(".preview-grid"), canvasArea: document.querySelector(".canvas-area"),
   };
   const state = {
     app: null, current: null, loading: false, request: 0, catalog: new Map(), skeletons: new Map(), backgroundGraphic: null,
@@ -63,6 +64,36 @@
   let gifencModulePromise = null;
   let canvasResizeObserver = null;
   let canvasResizeListenerInstalled = false;
+
+  // Keep decorative UI motion in sync with real work without touching the
+  // Spine display or the pixels used by PNG/GIF exports.
+  function setVisualState(kind, details = {}) {
+    if (!dom.previewGrid) return;
+    const stateName = kind === "ok" ? "ready" : kind || "idle";
+    dom.previewGrid.dataset.renderState = stateName;
+    dom.previewGrid.setAttribute("aria-busy", ["loading", "working", "exporting", "checking"].includes(stateName) ? "true" : "false");
+    if (dom.canvasArea) dom.canvasArea.dataset.renderState = stateName;
+    if (dom.canvas) dom.canvas.dataset.renderState = stateName;
+    if (details.character) dom.previewGrid.dataset.character = details.character;
+    if (details.costume) dom.previewGrid.dataset.costume = details.costume;
+    if (details.action) dom.previewGrid.dataset.action = details.action;
+  }
+
+  function setOperation(kind, active, details = {}) {
+    const target = kind === "export" ? dom.canvasArea : kind === "checking" ? dom.check : dom.previewGrid;
+    if (target) {
+      target.classList.toggle(`is-${kind}`, Boolean(active));
+      target.setAttribute("aria-busy", active ? "true" : "false");
+      if (kind === "export") target.dataset.exportState = active ? "active" : "idle";
+      if (kind === "checking") target.dataset.sourceState = active ? "checking" : "idle";
+    }
+    if (active) {
+      setVisualState(kind === "export" ? "exporting" : kind, details);
+      return;
+    }
+    const failed = dom.status?.classList.contains("fail");
+    setVisualState(failed ? "fail" : state.loading ? (state.current ? "working" : "loading") : state.current ? "ready" : "idle", details);
+  }
 
   function assetUrl(path) { return `${config.assetOrigin}/${path}`; }
   function familyFor(bundle) { return bundle.startsWith("v2_") ? "v2" : "legacy"; }
@@ -93,6 +124,11 @@
     dom.status.className = `preview-status ${kind}`;
     dom.title.textContent = title;
     dom.detail.textContent = detail;
+    setVisualState(kind || "loading", {
+      character: state.current?.character.key,
+      costume: state.current?.costume.bundle,
+      action: state.current?.action?.name,
+    });
   }
 
   function setBusy(busy) {
@@ -109,6 +145,19 @@
     dom.downloadGif.disabled = busy || !state.current;
     dom.gifFps.disabled = busy || !state.current;
     setComponentControlsDisabled(busy || state.componentCatalogLoading);
+    if (busy && !dom.canvasArea?.classList.contains("is-export")) {
+      setVisualState(state.current ? "working" : "loading", {
+        character: state.current?.character.key,
+        costume: state.current?.costume.bundle,
+        action: state.current?.action?.name,
+      });
+    } else if (!busy && !dom.canvasArea?.classList.contains("is-export")) {
+      setVisualState(dom.status?.classList.contains("fail") ? "fail" : state.current ? "ready" : "idle", {
+        character: state.current?.character.key,
+        costume: state.current?.costume.bundle,
+        action: state.current?.action?.name,
+      });
+    }
   }
 
   async function fetchJson(path) {
@@ -698,6 +747,12 @@
   async function checkSource() {
     dom.check.disabled = true;
     dom.result.textContent = "正在检查资源连接 / Checking source…";
+    dom.result.dataset.connectionState = "checking";
+    setOperation("checking", true, {
+      character: state.current?.character.key,
+      costume: state.current?.costume.bundle,
+      action: state.current?.action?.name,
+    });
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 15000);
     try {
@@ -715,14 +770,21 @@
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       response.body?.cancel().catch(() => {});
       dom.result.textContent = `资源连接正常 / Source reachable: ${response.status} ${response.statusText || "OK"}`;
+      dom.result.dataset.connectionState = "ok";
     } catch (error) {
       const detail = error?.name === "AbortError"
         ? "请求超时 / Request timed out"
         : error?.message || "Network request failed";
       dom.result.textContent = `资源连接失败 / Source blocked: ${detail}`;
+      dom.result.dataset.connectionState = "fail";
     } finally {
       window.clearTimeout(timeout);
       dom.check.disabled = state.loading;
+      setOperation("checking", false, {
+        character: state.current?.character.key,
+        costume: state.current?.costume.bundle,
+        action: state.current?.action?.name,
+      });
     }
   }
 
@@ -850,10 +912,13 @@
        populateCostumes(character.id, costume.bundle);
        populateFaceControls(state.current);
        loadComponentCatalog(state.current);
-      dom.status.classList.add("hidden");
-      dom.state.className = "state-pill ok";
-      dom.state.textContent = "已就绪 / Ready";
-      dom.result.textContent = `${character.name} · ${costume.label}`;
+       // Clear a previous failure class so the decorative stage returns to its
+       // ready palette after a later successful load.
+       dom.status.className = "preview-status hidden";
+       dom.state.className = "state-pill ok";
+       dom.state.textContent = "已就绪 / Ready";
+       setVisualState("ready", { character: character.key, costume: costume.bundle, action: action.name });
+       dom.result.textContent = `${character.name} · ${costume.label}`;
     } catch (error) {
       console.error(error);
       if (request === state.request) {
@@ -869,6 +934,11 @@
     if (!state.current || state.loading) return;
     state.current.action = selectedAction(state.current.actions, dom.action.value);
     seekCurrent(0);
+    setVisualState("ready", {
+      character: state.current.character.key,
+      costume: state.current.costume.bundle,
+      action: state.current.action.name,
+    });
     renderNow();
   }
 
@@ -942,6 +1012,8 @@
 
   async function downloadPng() {
     if (!state.current || state.loading) return;
+    const details = { character: state.current.character.key, costume: state.current.costume.bundle, action: state.current.action.name };
+    setOperation("export", true, details);
     try {
       state.app.renderer.render(state.app.stage);
       const blob = await canvasToBlob(dom.canvas, "image/png");
@@ -949,6 +1021,8 @@
       dom.result.textContent = "PNG 已开始下载 / PNG download started";
     } catch (error) {
       dom.result.textContent = `PNG 导出失败 / PNG export failed: ${error.message}`;
+    } finally {
+      setOperation("export", false, details);
     }
   }
 
@@ -986,7 +1060,9 @@
     const resumeAt = current.entry?.trackTime || 0;
     const ticker = state.app?.ticker;
     const tickerWasStarted = Boolean(ticker?.started);
+    const visualDetails = { character: current.character.key, costume: current.costume.bundle, action: action.name };
     setBusy(true);
+    setOperation("export", true, visualDetails);
     if (tickerWasStarted) ticker.stop();
     try {
       const { GIFEncoder, quantize, applyPalette } = await loadGifEncoder();
@@ -1046,6 +1122,7 @@
       seekCurrent(resumeAt);
       renderNow();
       if (tickerWasStarted) ticker.start();
+      setOperation("export", false, visualDetails);
       setBusy(false);
     }
   }

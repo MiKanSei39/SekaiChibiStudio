@@ -10,6 +10,7 @@
 </head>
 <body>
   <header class="topbar">
+    <span class="topbar-glow" aria-hidden="true"></span>
     <div class="brand">
       <span class="brand-mark" aria-label="PJSKchibi">PJSK</span>
       <div class="brand-copy">
@@ -17,7 +18,7 @@
         <h1>PJSKchibi <span>Project Sekai Q版小人编辑器</span></h1>
       </div>
     </div>
-    <span id="origin-state" class="state-pill">正在启动 / Starting</span>
+    <span id="origin-state" class="state-pill" role="status" aria-live="polite">正在启动 / Starting</span>
   </header>
 
   <main class="workspace">
@@ -89,18 +90,25 @@
           <p class="section-label">LIVE PREVIEW / 实时预览</p>
           <h2>角色舞台 <span>Spine motion stage</span></h2>
         </div>
-        <span class="preview-size">768 × 768</span>
+        <div class="preview-heading-meta" aria-label="预览信息">
+          <span class="live-badge"><i aria-hidden="true"></i> LIVE / 实时</span>
+          <span class="preview-size">768 × 768</span>
+        </div>
       </div>
       <div class="preview-grid">
+        <span class="stage-orbit stage-orbit-a" aria-hidden="true"></span>
+        <span class="stage-orbit stage-orbit-b" aria-hidden="true"></span>
+        <span class="stage-crosshair stage-crosshair-tl" aria-hidden="true"></span>
+        <span class="stage-crosshair stage-crosshair-br" aria-hidden="true"></span>
         <canvas id="stage" width="768" height="768" aria-label="Q版小人预览"></canvas>
-        <div class="preview-status">
+        <div class="preview-status" role="status" aria-live="polite">
           <span class="signal" aria-hidden="true"></span>
           <p id="preview-title">正在启动浏览器渲染器 / Starting renderer</p>
           <p id="preview-detail">资源和运行时就绪后，所选小人会直接在此浏览器中加载。</p>
         </div>
       </div>
       <div class="status-bar">
-        <span id="check-result">尚未检查 / No result yet</span>
+        <span id="check-result" role="status" aria-live="polite">尚未检查 / No result yet</span>
         <span class="community-note">如有意见或建议，欢迎加入 QQ 群 1039266754</span>
         <span>静态部署目标 / Static target: GitHub Pages</span>
       </div>
