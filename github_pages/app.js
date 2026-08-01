@@ -5,6 +5,8 @@
 
   const SIZE = 768;
   const GIF_SIZE = 512;
+  // Keep longer official motions smooth instead of truncating their cycle.
+  const GIF_MAX_FRAMES = 240;
   const GIFENC_URL = "https://cdn.jsdelivr.net/npm/gifenc@1.0.3/+esm";
   const SKELETON_CHUNK_SIZE = 1024 * 1024;
   const DEFAULT = "__default";
@@ -1020,14 +1022,14 @@
     return text.replace(/[^a-z0-9_-]+/gi, "-").replace(/^-+|-+$/g, "") || "pose";
   }
 
-  // gifenc stores delays in GIF's 10 ms time grid. Build one shared timeline
-  // so the sampled Spine phase and the encoded playback duration never drift.
+  // gifenc stores delays in GIF's 10 ms time grid. Keep encoded timing evenly
+  // distributed while sampling the original Spine cycle without phase drift.
   function gifTimeline(duration, requestedFps) {
     const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : 0;
     const safeFps = Number.isFinite(requestedFps) && requestedFps > 0 ? requestedFps : 10;
     if (!safeDuration) return { times: [0], delays: [10], duration: 0, fps: safeFps };
 
-    const frameCount = Math.min(120, Math.max(2, Math.round(safeDuration * safeFps)));
+    const frameCount = Math.min(GIF_MAX_FRAMES, Math.max(2, Math.round(safeDuration * safeFps)));
     const targetCentiseconds = Math.max(frameCount, Math.round(safeDuration * 100));
     const delays = [];
     let previousCentiseconds = 0;
@@ -1039,10 +1041,10 @@
     const encodedCentiseconds = delays.reduce((sum, delay) => sum + delay, 0);
     const sampledDuration = encodedCentiseconds / 100;
     const times = [];
-    let elapsedCentiseconds = 0;
     for (let index = 0; index < frameCount; index += 1) {
-      times.push(elapsedCentiseconds / 100);
-      elapsedCentiseconds += delays[index];
+      // Keep Spine on its original action phase. GIF delay quantization may
+      // change playback by a few milliseconds, but must not shift the loop.
+      times.push(safeDuration * index / frameCount);
     }
     return {
       times,
