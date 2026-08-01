@@ -949,9 +949,18 @@
     state.current.display.updateGeometry();
   }
 
-  function seekCurrent(time = 0) {
+  function seekCurrent(time = 0, reset = true) {
     if (!state.current) return;
     const current = state.current;
+    if (!reset && current.entry?.animation?.name === current.action.name) {
+      current.entry.trackTime = Math.max(0, time);
+      current.display.update(0);
+      updateTransform();
+      applyFaceOverrides();
+      applyComponentOverrides();
+      current.display.updateGeometry();
+      return current.entry;
+    }
     current.display.skeleton.setToSetupPose();
     current.display.state.clearTracks();
     const entry = current.display.state.setAnimation(0, current.action.name, true);
@@ -962,6 +971,7 @@
     applyFaceOverrides();
     applyComponentOverrides();
     current.display.updateGeometry();
+    return entry;
   }
 
   function renderNow() {
@@ -1010,6 +1020,38 @@
     return text.replace(/[^a-z0-9_-]+/gi, "-").replace(/^-+|-+$/g, "") || "pose";
   }
 
+  // gifenc stores delays in GIF's 10 ms time grid. Build one shared timeline
+  // so the sampled Spine phase and the encoded playback duration never drift.
+  function gifTimeline(duration, requestedFps) {
+    const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : 0;
+    const safeFps = Number.isFinite(requestedFps) && requestedFps > 0 ? requestedFps : 10;
+    if (!safeDuration) return { times: [0], delays: [10], duration: 0, fps: safeFps };
+
+    const frameCount = Math.min(120, Math.max(2, Math.round(safeDuration * safeFps)));
+    const targetCentiseconds = Math.max(frameCount, Math.round(safeDuration * 100));
+    const delays = [];
+    let previousCentiseconds = 0;
+    for (let index = 0; index < frameCount; index += 1) {
+      const nextCentiseconds = Math.round((index + 1) * targetCentiseconds / frameCount);
+      delays.push(Math.max(1, nextCentiseconds - previousCentiseconds));
+      previousCentiseconds = nextCentiseconds;
+    }
+    const encodedCentiseconds = delays.reduce((sum, delay) => sum + delay, 0);
+    const sampledDuration = encodedCentiseconds / 100;
+    const times = [];
+    let elapsedCentiseconds = 0;
+    for (let index = 0; index < frameCount; index += 1) {
+      times.push(elapsedCentiseconds / 100);
+      elapsedCentiseconds += delays[index];
+    }
+    return {
+      times,
+      delays: delays.map((centiseconds) => centiseconds * 10),
+      duration: sampledDuration,
+      fps: frameCount / sampledDuration,
+    };
+  }
+
   async function downloadPng() {
     if (!state.current || state.loading) return;
     const details = { character: state.current.character.key, costume: state.current.costume.bundle, action: state.current.action.name };
@@ -1055,8 +1097,8 @@
     const current = state.current;
     const action = current.action;
     const fps = Number(dom.gifFps.value);
-    const duration = Math.min(action.duration || 0, 4);
-    const frameCount = duration > 0 ? Math.min(120, Math.max(2, Math.ceil(duration * fps))) : 1;
+    const timeline = gifTimeline(action.duration || 0, fps);
+    const frameCount = timeline.times.length;
     const resumeAt = current.entry?.trackTime || 0;
     const ticker = state.app?.ticker;
     const tickerWasStarted = Boolean(ticker?.started);
@@ -1072,7 +1114,6 @@
       frameCanvas.height = GIF_SIZE;
       const context = frameCanvas.getContext("2d", { willReadFrequently: true });
       const paletteFormat = state.transparent ? "rgba4444" : "rgb565";
-      const delay = Math.round(1000 / fps);
 
       const captureFrame = () => {
         context.clearRect(0, 0, GIF_SIZE, GIF_SIZE);
@@ -1081,14 +1122,15 @@
       };
 
       // A global palette keeps stable colors and one transparent index across frames.
-      const sampleCount = Math.min(8, frameCount);
+      const sampleCount = Math.min(16, frameCount);
       const frameBytes = GIF_SIZE * GIF_SIZE * 4;
       const palettePixels = new Uint8ClampedArray(sampleCount * frameBytes);
       for (let sample = 0; sample < sampleCount; sample += 1) {
         const index = sampleCount === 1
           ? 0
           : Math.round(sample * (frameCount - 1) / (sampleCount - 1));
-        seekCurrent(duration > 0 ? index / fps : 0);
+        if (sample === 0) seekCurrent(timeline.times[index], true);
+        else seekCurrent(timeline.times[index], false);
         renderNow();
         palettePixels.set(captureFrame(), sample * frameBytes);
       }
@@ -1099,13 +1141,16 @@
       const { palette, transparentIndex } = normalizeGifPalette(quantizedPalette, state.transparent);
 
       for (let index = 0; index < frameCount; index += 1) {
-        seekCurrent(duration > 0 ? index / fps : 0);
+        // Reuse one animation track during export. Recreating it for every
+        // frame resets attachment timelines and can make moving parts flash.
+        if (index === 0) seekCurrent(timeline.times[index], true);
+        else seekCurrent(timeline.times[index], false);
         renderNow();
         const indexed = applyPalette(captureFrame(), palette, paletteFormat);
         encoder.writeFrame(indexed, GIF_SIZE, GIF_SIZE, {
           ...(index === 0 ? { palette, repeat: 0 } : {}),
-          delay,
-          dispose: state.transparent ? 2 : 0,
+          delay: timeline.delays[index],
+          dispose: state.transparent ? 2 : 1,
           transparent: transparentIndex >= 0, transparentIndex,
         });
         dom.result.textContent = `正在生成 GIF：${index + 1} / ${frameCount}`;
@@ -1114,12 +1159,15 @@
       encoder.finish();
       const blob = new Blob([encoder.bytes()], { type: "image/gif" });
       downloadBlob(blob, `sekai-chibi-${current.character.key}-${safeFilename(action.name)}.gif`);
-      dom.result.textContent = `GIF 已开始下载 / GIF download started (${frameCount} frames, ${fps} fps)`;
+      const effectiveFps = timeline.fps.toFixed(2).replace(/\.00$/, "");
+      const alphaNote = state.transparent ? "；透明 GIF 为 1-bit alpha，边缘建议使用有色背景" : "";
+      dom.result.textContent = `GIF 已开始下载 / GIF download started (${frameCount} frames, ${effectiveFps} fps, ${timeline.duration.toFixed(2)}s${alphaNote})`;
     } catch (error) {
       console.error(error);
       dom.result.textContent = `GIF 导出失败 / GIF export failed: ${error.message}`;
     } finally {
-      seekCurrent(resumeAt);
+      const actionDuration = Number(current.action?.duration) || 0;
+      seekCurrent(actionDuration > 0 ? resumeAt % actionDuration : resumeAt);
       renderNow();
       if (tickerWasStarted) ticker.start();
       setOperation("export", false, visualDetails);
