@@ -49,7 +49,7 @@
     cheeks: document.querySelector("#cheeks"), effect: document.querySelector("#effect"), background: document.querySelector("#background"),
     transparent: document.querySelector("#transparent"), scale: document.querySelector("#scale"), scaleValue: document.querySelector("#scale-value"),
     offsetY: document.querySelector("#offset-y"), offsetYValue: document.querySelector("#offset-y-value"),
-    origin: document.querySelector("#asset-origin"), check: document.querySelector("#check-source"), download: document.querySelector("#download-png"),
+    check: document.querySelector("#check-source"), download: document.querySelector("#download-png"),
     downloadGif: document.querySelector("#download-gif"), gifFps: document.querySelector("#gif-fps"),
     componentGroup: document.querySelector("#component-group"), componentOptions: document.querySelector("#component-options"),
     crossRigMode: document.querySelector("#cross-rig-mode"), resetComponents: document.querySelector("#reset-components"), componentStatus: document.querySelector("#component-status"),
@@ -1190,7 +1190,6 @@
       view: dom.canvas, width: SIZE, height: SIZE, backgroundAlpha: 0, antialias: true, preserveDrawingBuffer: true, autoDensity: true, resolution: 1,
     });
     watchPreviewSize();
-    dom.origin.textContent = config.assetOrigin;
     state.backgroundGraphic = new PIXI.Graphics();
     state.app.stage.addChild(state.backgroundGraphic);
     updateBackground();
