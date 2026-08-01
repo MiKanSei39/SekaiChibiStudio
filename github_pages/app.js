@@ -61,6 +61,8 @@
     face: { eyes: DEFAULT, brows: DEFAULT, mouth: DEFAULT, cheeks: NONE, effect: NONE }, background: "#ffffff", transparent: false, scale: 100, offsetY: 0,
   };
   let gifencModulePromise = null;
+  let canvasResizeObserver = null;
+  let canvasResizeListenerInstalled = false;
 
   function assetUrl(path) { return `${config.assetOrigin}/${path}`; }
   function familyFor(bundle) { return bundle.startsWith("v2_") ? "v2" : "legacy"; }
@@ -896,6 +898,26 @@
     if (state.app) state.app.renderer.render(state.app.stage);
   }
 
+  function fitCanvasToPreview() {
+    const grid = dom.canvas.closest(".preview-grid");
+    if (!grid) return;
+    const size = Math.max(1, Math.floor(Math.min(grid.clientWidth, grid.clientHeight, SIZE)));
+    dom.canvas.style.setProperty("width", `${size}px`, "important");
+    dom.canvas.style.setProperty("height", `${size}px`, "important");
+  }
+
+  function watchPreviewSize() {
+    fitCanvasToPreview();
+    if (typeof ResizeObserver !== "undefined") {
+      canvasResizeObserver?.disconnect();
+      canvasResizeObserver = new ResizeObserver(fitCanvasToPreview);
+      canvasResizeObserver.observe(dom.canvas.closest(".preview-grid"));
+    } else if (!canvasResizeListenerInstalled) {
+      window.addEventListener("resize", fitCanvasToPreview, { passive: true });
+      canvasResizeListenerInstalled = true;
+    }
+  }
+
   function canvasToBlob(canvas, type) {
     return new Promise((resolve, reject) => canvas.toBlob((blob) => {
       if (blob) resolve(blob);
@@ -1040,6 +1062,7 @@
     state.app = new PIXI.Application({
       view: dom.canvas, width: SIZE, height: SIZE, backgroundAlpha: 0, antialias: true, preserveDrawingBuffer: true, autoDensity: true, resolution: 1,
     });
+    watchPreviewSize();
     dom.origin.textContent = config.assetOrigin;
     state.backgroundGraphic = new PIXI.Graphics();
     state.app.stage.addChild(state.backgroundGraphic);

@@ -384,7 +384,7 @@ output { float: right; color: var(--muted); font-weight: 500; }
 }
 
 #stage {
-  width: min(100%, 768px) !important;
+  width: auto !important;
   height: auto !important;
   max-width: 100%;
   max-height: 100%;
