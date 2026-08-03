@@ -262,7 +262,7 @@
       eyes, brows, mouth, cheeks, effect,
       slots: {
         face: [...new Set([...eyes, ...brows, ...mouth, ...cheeks, ...effect]
-          .flatMap((choice) => choice.targets.map((target) => target.slotName)))],
+          .flatMap((choice) => (choice.targets || []).map((target) => target.slotName)))],
         cheeks: [...new Set(cheeks.flatMap((choice) => choice.targets.map((target) => target.slotName)))],
         effect: [...new Set(effects.map((entry) => entry.slotName))],
       },

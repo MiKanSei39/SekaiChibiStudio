@@ -436,6 +436,8 @@
     const eyes = [...leftByKey.keys()].filter((key) => rightByKey.has(key)).map((key) => ({
       value: key, label: faceLabel(key), targets: [...leftByKey.get(key).targets, ...rightByKey.get(key).targets],
     }));
+    const brows = groupFaceEntries(entries, "F_eyebrow", sex);
+    const mouth = groupFaceEntries(entries, "F_mouth", sex);
     const cheeks = groupFaceEntries(entries, "F_cheek", sex);
     const effects = entries.filter((entry) => startsWithAny(entry.name, ["F_ef", "F_tear"]));
     const effectGroups = new Map();
@@ -450,10 +452,10 @@
       return { value, label: faceLabel(value), targets: [{ slotName: picked.slotName, attachmentName: picked.name }] };
     }).sort((left, right) => left.value.localeCompare(right.value, undefined, { numeric: true }));
     return {
-      eyes, brows: groupFaceEntries(entries, "F_eyebrow", sex), mouth: groupFaceEntries(entries, "F_mouth", sex), cheeks, effect,
+      eyes, brows, mouth, cheeks, effect,
       slots: {
         face: [...new Set([...eyes, ...brows, ...mouth, ...cheeks, ...effect]
-          .flatMap((choice) => choice.targets.map((target) => target.slotName)))],
+          .flatMap((choice) => (choice.targets || []).map((target) => target.slotName)))],
         cheeks: [...new Set(cheeks.flatMap((choice) => choice.targets.map((target) => target.slotName)))],
         effect: [...new Set(effects.map((entry) => entry.slotName))],
       },
