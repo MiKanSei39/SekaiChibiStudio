@@ -15,6 +15,7 @@ Pages，无需单独准备服务器。
 - 眼睛、眉毛、嘴巴、脸颊与特效覆盖 / Eyes, brows, mouth, cheeks, and effect overrides
 - 背景色、透明画布、缩放与垂直位置 / Background color, transparent canvas, scale, and vertical offset
 - 浏览器端 PNG 与 GIF 下载 / Browser-side PNG and GIF downloads
+- 右下角浏览数据面板，显示总浏览量与小时 / 日趋势 / Bottom-right view panel with total, hourly, and daily trends
 - GIF 帧率选择，按完整动作周期导出、最高 240 帧 / GIF frame-rate selection, complete action cycles and up to 240 frames
 - 同角色安全组件叠加 / Safe same-character component stacking
 - 实验性跨骨骼组件模式，支持完整衣服主体与腿部 / 鞋层组 / Experimental cross-rig component mode with complete outfit and leg/shoe layer sets

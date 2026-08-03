@@ -56,6 +56,7 @@
         <select id="cheeks" disabled></select>
         <label for="effect">特效 / Effect</label>
         <select id="effect" disabled></select>
+        <p id="face-status" class="helper"></p>
       </section>
       <section class="transform-controls">
         <p class="section-label">画布 / Canvas</p>
@@ -114,6 +115,53 @@
       </div>
     </section>
   </main>
+
+  <aside id="view-stats-widget" class="view-stats-widget" aria-label="浏览数据">
+    <button id="view-stats-toggle" class="view-stats-toggle" type="button" aria-expanded="false" aria-controls="view-stats-panel">
+      <span class="view-stats-toggle-icon" aria-hidden="true"><span></span><span></span><span></span></span>
+      <span class="view-stats-toggle-copy">
+        <strong>浏览数据</strong>
+        <small><span id="view-stats-button-count">--</span> 次浏览</small>
+      </span>
+      <span class="view-stats-toggle-chevron" aria-hidden="true">⌃</span>
+    </button>
+    <section id="view-stats-panel" class="view-stats-panel" hidden aria-labelledby="view-stats-title">
+      <div class="view-stats-panel-heading">
+        <div>
+          <p class="section-label">SITE PULSE / 站点脉搏</p>
+          <h2 id="view-stats-title">浏览数据</h2>
+        </div>
+        <div class="view-stats-panel-actions">
+          <button id="view-stats-refresh" class="view-stats-icon-button" type="button" aria-label="刷新浏览数据" title="刷新">↻</button>
+          <button id="view-stats-close" class="view-stats-icon-button" type="button" aria-label="关闭浏览数据" title="关闭">×</button>
+        </div>
+      </div>
+      <div class="view-stats-total-card">
+        <span class="view-stats-total-label">当前浏览量 / Total views</span>
+        <strong id="view-stats-total">--</strong>
+        <span id="view-stats-updated" class="view-stats-updated">正在读取数据…</span>
+      </div>
+      <div class="view-stats-charts">
+        <article class="view-stats-chart-card">
+          <div class="view-stats-chart-heading">
+            <div><strong>小时趋势</strong><span>最近 24 小时</span></div>
+            <span class="view-stats-chart-dot" aria-hidden="true"></span>
+          </div>
+          <div id="view-stats-hourly" class="view-stats-chart" role="img" aria-label="最近 24 小时浏览量折线图"></div>
+          <p id="view-stats-hourly-note" class="view-stats-chart-note">正在读取趋势…</p>
+        </article>
+        <article class="view-stats-chart-card">
+          <div class="view-stats-chart-heading">
+            <div><strong>日趋势</strong><span>最近 14 天</span></div>
+            <span class="view-stats-chart-dot" aria-hidden="true"></span>
+          </div>
+          <div id="view-stats-daily" class="view-stats-chart" role="img" aria-label="最近 14 天浏览量折线图"></div>
+          <p id="view-stats-daily-note" class="view-stats-chart-note">正在读取趋势…</p>
+        </article>
+      </div>
+      <p id="view-stats-status" class="view-stats-status" role="status" aria-live="polite"></p>
+    </section>
+  </aside>
 
   <script defer src="https://cdn.jsdelivr.net/npm/pixi.js@7.4.2/dist/pixi.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/@esotericsoftware/spine-pixi@4.1.56/dist/iife/spine-pixi.min.js"></script>

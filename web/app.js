@@ -51,6 +51,7 @@
     mouth: document.querySelector("#mouth"),
     cheeks: document.querySelector("#cheeks"),
     effect: document.querySelector("#effect"),
+    faceStatus: document.querySelector("#face-status"),
     background: document.querySelector("#background"),
     transparent: document.querySelector("#transparent"),
     gifFps: document.querySelector("#gif-fps"),
@@ -90,6 +91,12 @@
     face: { eyes: DEFAULT, brows: DEFAULT, mouth: DEFAULT, cheeks: NONE, effect: NONE },
   };
 
+  const FACE_CATEGORIES = ["eyes", "brows", "mouth", "cheeks", "effect"];
+
+  function defaultFaceState() {
+    return { eyes: DEFAULT, brows: DEFAULT, mouth: DEFAULT, cheeks: NONE, effect: NONE };
+  }
+
   function setLoading(message, visible = true) {
     dom.loading.textContent = message;
     dom.loading.classList.toggle("hidden", !visible);
@@ -101,18 +108,33 @@
   }
 
   function setControlsEnabled(enabled) {
-    [dom.action, dom.eyes, dom.brows, dom.mouth, dom.cheeks, dom.effect, dom.png, dom.gif, dom.gifFps]
+    [dom.action, dom.png, dom.gif, dom.gifFps]
       .forEach((element) => { element.disabled = !enabled; });
     dom.costume.disabled = !enabled || (state.current?.costumes?.length || 0) < 2;
     // Cross-rig mode must remain available even if this costume itself has no
     // replacement choices; another character may still provide a safe slot.
     setComponentControlsDisabled(!enabled || state.componentCatalogLoading);
+    setFaceControlsDisabled(!enabled);
   }
 
   function setComponentControlsDisabled(disabled) {
-    dom.componentOptions.querySelectorAll("select").forEach((select) => { select.disabled = disabled; });
-    dom.crossRigMode.disabled = disabled || Boolean(state.current?.isReversed);
-    dom.resetComponents.disabled = disabled || state.componentSelections.size === 0;
+    const blocked = disabled || isBackFacing(state.current);
+    dom.componentOptions.querySelectorAll("select").forEach((select) => { select.disabled = blocked; });
+    dom.crossRigMode.disabled = blocked || Boolean(state.current?.isReversed);
+    dom.resetComponents.disabled = blocked || state.componentSelections.size === 0;
+  }
+
+  function setFaceControlsDisabled(disabled) {
+    const blocked = disabled || Boolean(state.current && isFaceOverrideBlocked(state.current));
+    for (const category of FACE_CATEGORIES) {
+      const select = dom[category];
+      select.disabled = blocked || select.options.length <= 1;
+    }
+    if (dom.faceStatus) {
+      dom.faceStatus.textContent = state.current && isFaceOverrideBlocked(state.current)
+        ? "反向服装或背面动作不会显示正面表情覆盖。"
+        : "";
+    }
   }
 
   function option(select, value, label) {
@@ -236,10 +258,11 @@
       const picked = pickVariant(group, sex);
       return { value: key, label: faceLabel(key), targets: [{ slotName: picked.slotName, attachmentName: picked.name }] };
     }).sort((leftItem, rightItem) => leftItem.value.localeCompare(rightItem.value, undefined, { numeric: true }));
-
     return {
       eyes, brows, mouth, cheeks, effect,
       slots: {
+        face: [...new Set([...eyes, ...brows, ...mouth, ...cheeks, ...effect]
+          .flatMap((choice) => choice.targets.map((target) => target.slotName)))],
         cheeks: [...new Set(cheeks.flatMap((choice) => choice.targets.map((target) => target.slotName)))],
         effect: [...new Set(effects.map((entry) => entry.slotName))],
       },
@@ -262,7 +285,6 @@
     dom.costume.value = current.costumeKey || "";
     dom.costume.disabled = state.busy || costumes.length < 2;
     dom.costumeStatus.textContent = current.costumeNote || "";
-
     refreshComponentControls(current, current.components || []);
 
     clearSelect(dom.action);
@@ -280,6 +302,7 @@
     dom.mouth.value = state.face.mouth;
     dom.cheeks.value = state.face.cheeks;
     dom.effect.value = state.face.effect;
+    setFaceControlsDisabled(state.busy);
   }
 
   function selectAnimation(actions, name) {
@@ -342,6 +365,11 @@
   }
 
   function applyFaceOverrides() {
+    if (!state.current) return;
+    if (isFaceOverrideBlocked(state.current)) {
+      clearFaceAttachments();
+      return;
+    }
     applyCategory("eyes");
     applyCategory("brows");
     applyCategory("mouth");
@@ -350,10 +378,17 @@
   }
 
   function applyComponentOverrides() {
-    if (!state.current || !state.componentOverrides.length) return;
+    if (!state.current || isBackFacing(state.current) || !state.componentOverrides.length) return;
     for (const override of state.componentOverrides) {
       const slot = state.current.spine.skeleton.findSlot(override.slotName);
       if (slot) slot.setAttachment(override.attachment);
+    }
+  }
+
+  function clearFaceAttachments() {
+    if (!state.current) return;
+    for (const slotName of state.current.face.slots.face || []) {
+      state.current.spine.skeleton.setAttachment(slotName, null);
     }
   }
 
@@ -510,6 +545,25 @@
     return Boolean(costume?.isReversed) || /_r$/i.test(costume?.key || "");
   }
 
+  function isBackFacingAction(action) {
+    return /(?:^|_)b(?:2)?$/i.test(String(action?.name || action || ""));
+  }
+
+  function isFaceOverrideBlocked(current = state.current) {
+    return Boolean(current && (current.isReversed || isBackFacingAction(current.action)));
+  }
+
+  function isBackFacing(current = state.current) {
+    return Boolean(current && (current.isReversed || isBackFacingAction(current.action)));
+  }
+
+  function resetFaceChoices() {
+    state.face = defaultFaceState();
+    for (const category of FACE_CATEGORIES) {
+      dom[category].value = state.face[category];
+    }
+  }
+
   function isCompatibleComponentSource(current, costume) {
     return Boolean(
       costume
@@ -640,6 +694,15 @@
     current.components = components;
     dom.componentOptions.textContent = "";
     dom.crossRigMode.checked = state.crossRigMode;
+    if (isBackFacing(current)) {
+      state.componentSelections.clear();
+      state.componentOverrides = [];
+      dom.componentStatus.textContent = current.isReversed
+        ? "反向版本保持完整服装，不显示正面组件覆盖。"
+        : "背面动作保持完整服装，不显示正面组件覆盖。";
+      setComponentControlsDisabled(true);
+      return;
+    }
     dom.crossRigMode.disabled = state.busy || state.componentCatalogLoading || current.isReversed;
     const grouped = componentsByGroup(components);
     const orderedGroups = [...grouped.entries()].sort(([left], [right]) => (
@@ -696,7 +759,7 @@
   }
 
   async function onCrossRigModeChange() {
-    if (!state.current || state.busy || state.componentCatalogLoading || state.current.isReversed) {
+    if (!state.current || state.busy || state.componentCatalogLoading || isBackFacing(state.current)) {
       dom.crossRigMode.checked = state.crossRigMode;
       return;
     }
@@ -792,6 +855,8 @@
           costume: state.current?.costumeKey || null,
           costumeName: state.current?.costumeName || null,
           components: selectedComponentKeys(),
+          faceControlsDisabled: dom.eyes.disabled,
+          faceOverrideBlocked: isFaceOverrideBlocked(),
           crossRigMode: state.crossRigMode,
           componentCatalogLoading: state.componentCatalogLoading,
           action: state.current?.action?.name || null,
@@ -935,7 +1000,15 @@
     if (!state.current) return;
     const trackTime = state.current.entry?.trackTime || 0;
     state.current.action = selectAnimation(state.current.actions, dom.action.value);
+    if (isBackFacing(state.current)) {
+      resetFaceChoices();
+      state.componentSelections.clear();
+      state.componentOverrides = [];
+    }
     seekCurrent(trackTime);
+    refreshComponentControls(state.current, state.current.components);
+    setComponentControlsDisabled(false);
+    setFaceControlsDisabled(false);
     renderNow();
     setGifAvailability();
   }
@@ -947,7 +1020,7 @@
     const face = { ...state.face };
     await loadCharacter(characterId, dom.costume.value);
     if (!state.current) return;
-    state.face = face;
+    state.face = isFaceOverrideBlocked(state.current) ? defaultFaceState() : face;
     for (const category of ["eyes", "brows", "mouth", "cheeks", "effect"]) {
       const select = dom[category];
       if ([...select.options].some((item) => item.value === state.face[category])) {
@@ -960,13 +1033,15 @@
     const nextAction = selectAnimation(state.current.actions, actionName);
     state.current.action = nextAction;
     dom.action.value = nextAction.name;
+    if (isFaceOverrideBlocked(state.current)) resetFaceChoices();
     seekCurrent(0);
+    setFaceControlsDisabled(false);
     renderNow();
     setGifAvailability();
   }
 
   async function applyComponentChoice(group, key) {
-    if (!state.current || state.busy || state.componentCatalogLoading) return;
+    if (!state.current || state.busy || state.componentCatalogLoading || isBackFacing(state.current)) return;
     const resumeAt = state.current.entry?.trackTime || 0;
     const previousKey = state.componentSelections.get(group);
     if (key === NONE) state.componentSelections.delete(group);
@@ -1001,6 +1076,11 @@
 
   function onFaceChange(category, element) {
     if (!state.current) return;
+    if (isFaceOverrideBlocked(state.current)) {
+      resetFaceChoices();
+      setFaceControlsDisabled(false);
+      return;
+    }
     state.face[category] = element.value;
     seekCurrent(state.current.entry?.trackTime || 0);
     renderNow();

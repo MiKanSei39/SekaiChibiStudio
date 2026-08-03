@@ -47,6 +47,7 @@
     character: document.querySelector("#character"), costume: document.querySelector("#costume"), action: document.querySelector("#action"),
     eyes: document.querySelector("#eyes"), brows: document.querySelector("#brows"), mouth: document.querySelector("#mouth"),
     cheeks: document.querySelector("#cheeks"), effect: document.querySelector("#effect"), background: document.querySelector("#background"),
+    faceStatus: document.querySelector("#face-status"),
     transparent: document.querySelector("#transparent"), scale: document.querySelector("#scale"), scaleValue: document.querySelector("#scale-value"),
     offsetY: document.querySelector("#offset-y"), offsetYValue: document.querySelector("#offset-y-value"),
     check: document.querySelector("#check-source"), download: document.querySelector("#download-png"),
@@ -56,6 +57,13 @@
     result: document.querySelector("#check-result"), state: document.querySelector("#origin-state"), status: document.querySelector(".preview-status"),
     title: document.querySelector("#preview-title"), detail: document.querySelector("#preview-detail"), canvas: document.querySelector("#stage"),
     previewGrid: document.querySelector(".preview-grid"), canvasArea: document.querySelector(".canvas-area"),
+    viewStatsWidget: document.querySelector("#view-stats-widget"), viewStatsToggle: document.querySelector("#view-stats-toggle"),
+    viewStatsPanel: document.querySelector("#view-stats-panel"), viewStatsButtonCount: document.querySelector("#view-stats-button-count"),
+    viewStatsTotal: document.querySelector("#view-stats-total"), viewStatsUpdated: document.querySelector("#view-stats-updated"),
+    viewStatsHourly: document.querySelector("#view-stats-hourly"), viewStatsDaily: document.querySelector("#view-stats-daily"),
+    viewStatsHourlyNote: document.querySelector("#view-stats-hourly-note"), viewStatsDailyNote: document.querySelector("#view-stats-daily-note"),
+    viewStatsStatus: document.querySelector("#view-stats-status"), viewStatsRefresh: document.querySelector("#view-stats-refresh"),
+    viewStatsClose: document.querySelector("#view-stats-close"),
   };
   const state = {
     app: null, current: null, loading: false, request: 0, catalog: new Map(), skeletons: new Map(), backgroundGraphic: null,
@@ -63,9 +71,16 @@
     componentCatalogEpoch: 0, componentCatalogLoading: false, crossRigMode: false,
     face: { eyes: DEFAULT, brows: DEFAULT, mouth: DEFAULT, cheeks: NONE, effect: NONE }, background: "#ffffff", transparent: false, scale: 100, offsetY: 0,
   };
+  const FACE_CATEGORIES = ["eyes", "brows", "mouth", "cheeks", "effect"];
+
+  function defaultFaceState() {
+    return { eyes: DEFAULT, brows: DEFAULT, mouth: DEFAULT, cheeks: NONE, effect: NONE };
+  }
   let gifencModulePromise = null;
   let canvasResizeObserver = null;
   let canvasResizeListenerInstalled = false;
+  const viewStatsState = { loading: false, opened: false, bound: false, lastLoadedAt: 0, total: null };
+  const VIEW_STATS_TIMEOUT_MS = 5000;
 
   // Keep decorative UI motion in sync with real work without touching the
   // Spine display or the pixels used by PNG/GIF exports.
@@ -133,13 +148,174 @@
     });
   }
 
+  function statsConfig() {
+    const stats = config?.viewStats;
+    return stats?.enabled && stats.apiBase && stats.namespace && stats.counter ? stats : null;
+  }
+
+  function statsUrl(name, action = "") {
+    const stats = statsConfig();
+    if (!stats) return "";
+    const base = String(stats.apiBase).replace(/\/+$/, "");
+    const namespace = encodeURIComponent(stats.namespace);
+    const counter = encodeURIComponent(name);
+    return `${base}/${namespace}/${counter}${action ? `/${action}` : ""}`;
+  }
+
+  function statsBucket(prefix, date) {
+    const stamp = [date.getUTCFullYear(), String(date.getUTCMonth() + 1).padStart(2, "0"), String(date.getUTCDate()).padStart(2, "0")].join("");
+    if (prefix === "hour") return `${config.viewStats.counter}H${stamp}${String(date.getUTCHours()).padStart(2, "0")}`;
+    return `${config.viewStats.counter}D${stamp}`;
+  }
+
+  async function fetchCounter(name) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), VIEW_STATS_TIMEOUT_MS);
+    let response;
+    try {
+      response = await fetch(statsUrl(name), { cache: "no-store", credentials: "omit", referrerPolicy: "no-referrer", signal: controller.signal });
+    } finally {
+      window.clearTimeout(timeout);
+    }
+    if (!response.ok) throw new Error(`统计服务 HTTP ${response.status}`);
+    const data = await response.json();
+    const count = Number(data?.count ?? data?.value);
+    if (!Number.isFinite(count)) throw new Error("统计服务返回了无效数据");
+    return count;
+  }
+
+  async function incrementCounter(name) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), VIEW_STATS_TIMEOUT_MS);
+    let response;
+    try {
+      response = await fetch(statsUrl(name, "up"), { cache: "no-store", credentials: "omit", referrerPolicy: "no-referrer", signal: controller.signal });
+    } finally {
+      window.clearTimeout(timeout);
+    }
+    if (!response.ok) throw new Error(`统计服务 HTTP ${response.status}`);
+    const data = await response.json();
+    const count = Number(data?.count ?? data?.value);
+    if (!Number.isFinite(count)) throw new Error("统计服务返回了无效数据");
+    return count;
+  }
+
+  function formatCount(value) {
+    return Number.isFinite(value) ? new Intl.NumberFormat("zh-CN").format(value) : "--";
+  }
+
+  function formatUpdatedTime(date = new Date()) {
+    return `更新于 ${date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
+  }
+
+  function chartSvg(points, labels, accent) {
+    const width = 420;
+    const height = 142;
+    const pad = { top: 12, right: 10, bottom: 26, left: 10 };
+    const values = points.map((point) => Number(point) || 0);
+    const max = Math.max(1, ...values);
+    const min = Math.min(0, ...values);
+    const range = Math.max(1, max - min);
+    const x = (index) => pad.left + (width - pad.left - pad.right) * (values.length <= 1 ? .5 : index / (values.length - 1));
+    const y = (value) => pad.top + (height - pad.top - pad.bottom) * (1 - (value - min) / range);
+    const coords = values.map((value, index) => [x(index), y(value)]);
+    const line = coords.map(([px, py], index) => `${index ? "L" : "M"}${px.toFixed(1)},${py.toFixed(1)}`).join(" ");
+    const lastCoord = coords[coords.length - 1];
+    const area = `${line} L${lastCoord[0].toFixed(1)},${height - pad.bottom} L${coords[0][0].toFixed(1)},${height - pad.bottom} Z`;
+    const labelIndexes = values.length > 1 ? [0, Math.floor((values.length - 1) / 2), values.length - 1] : [0];
+    const grid = [0, .5, 1].map((ratio) => {
+      const gy = pad.top + (height - pad.top - pad.bottom) * ratio;
+      return `<line x1="${pad.left}" y1="${gy.toFixed(1)}" x2="${width - pad.right}" y2="${gy.toFixed(1)}" class="stats-grid-line" />`;
+    }).join("");
+    const dots = coords.map(([px, py], index) => `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${index === values.length - 1 ? 3.4 : 2.1}" class="stats-point" />`).join("");
+    const text = labelIndexes.map((index) => `<text x="${x(index).toFixed(1)}" y="${height - 7}" text-anchor="${index === 0 ? "start" : index === values.length - 1 ? "end" : "middle"}" class="stats-axis-label">${labels[index] || ""}</text>`).join("");
+    return `<svg viewBox="0 0 ${width} ${height}" class="stats-chart-svg" role="presentation" style="--stats-chart-accent:${accent}"><defs><linearGradient id="stats-area-${accent.slice(1)}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${accent}" stop-opacity=".25"/><stop offset="1" stop-color="${accent}" stop-opacity="0"/></linearGradient></defs>${grid}<path d="${area}" class="stats-area" fill="url(#stats-area-${accent.slice(1)})"/><path d="${line}" class="stats-line"/>${dots}${text}</svg>`;
+  }
+
+  function renderChart(element, points, labels, note, accent) {
+    if (!element) return;
+    element.innerHTML = chartSvg(points, labels, accent);
+    note.textContent = points.some((point) => point > 0) ? "已记录的访问量" : "暂无足够历史数据，访问后会逐步形成趋势";
+  }
+
+  async function loadViewStats() {
+    const stats = statsConfig();
+    if (!stats || viewStatsState.loading) return;
+    viewStatsState.loading = true;
+    if (dom.viewStatsRefresh) dom.viewStatsRefresh.disabled = true;
+    if (dom.viewStatsStatus) dom.viewStatsStatus.textContent = "正在同步浏览数据…";
+    try {
+      const now = new Date();
+      const [total, ...hourCounts] = await Promise.all([
+        fetchCounter(stats.counter),
+        ...Array.from({ length: 24 }, (_, index) => fetchCounter(statsBucket("hour", new Date(now.getTime() - (23 - index) * 60 * 60 * 1000))).catch(() => 0)),
+      ]);
+      const dayCounts = await Promise.all(Array.from({ length: 14 }, (_, index) => fetchCounter(statsBucket("day", new Date(now.getTime() - (13 - index) * 24 * 60 * 60 * 1000))).catch(() => 0)));
+      viewStatsState.total = total;
+      viewStatsState.lastLoadedAt = Date.now();
+      dom.viewStatsButtonCount.textContent = formatCount(total);
+      dom.viewStatsTotal.textContent = formatCount(total);
+      dom.viewStatsUpdated.textContent = formatUpdatedTime();
+      const hourLabels = hourCounts.map((_, index) => `${String(new Date(now.getTime() - (23 - index) * 60 * 60 * 1000).getUTCHours()).padStart(2, "0")}时`);
+      const dayLabels = dayCounts.map((_, index) => { const date = new Date(now.getTime() - (13 - index) * 24 * 60 * 60 * 1000); return `${date.getUTCMonth() + 1}/${date.getUTCDate()}`; });
+      renderChart(dom.viewStatsHourly, hourCounts, hourLabels, dom.viewStatsHourlyNote, "#e95792");
+      renderChart(dom.viewStatsDaily, dayCounts, dayLabels, dom.viewStatsDailyNote, "#147f85");
+      dom.viewStatsStatus.textContent = "数据来自网页版访问记录；本地版不会上报。";
+    } catch (error) {
+      console.warn("View statistics unavailable", error);
+      dom.viewStatsButtonCount.textContent = "--";
+      dom.viewStatsTotal.textContent = "--";
+      dom.viewStatsUpdated.textContent = "暂时无法连接统计服务";
+      renderChart(dom.viewStatsHourly, Array(24).fill(0), Array(24).fill(""), dom.viewStatsHourlyNote, "#e95792");
+      renderChart(dom.viewStatsDaily, Array(14).fill(0), Array(14).fill(""), dom.viewStatsDailyNote, "#147f85");
+      dom.viewStatsStatus.textContent = "浏览数据服务暂时不可用，编辑器功能不受影响。";
+    } finally {
+      viewStatsState.loading = false;
+      if (dom.viewStatsRefresh) dom.viewStatsRefresh.disabled = false;
+    }
+  }
+
+  function setViewStatsOpen(open) {
+    viewStatsState.opened = Boolean(open);
+    dom.viewStatsPanel.hidden = !viewStatsState.opened;
+    dom.viewStatsWidget.classList.toggle("is-open", viewStatsState.opened);
+    dom.viewStatsToggle.setAttribute("aria-expanded", String(viewStatsState.opened));
+    if (viewStatsState.opened) loadViewStats();
+  }
+
+  async function initViewStats() {
+    if (!statsConfig() || !dom.viewStatsWidget) return;
+    if (!viewStatsState.bound) {
+      dom.viewStatsToggle.addEventListener("click", () => setViewStatsOpen(!viewStatsState.opened));
+      dom.viewStatsClose.addEventListener("click", () => setViewStatsOpen(false));
+      dom.viewStatsRefresh.addEventListener("click", () => loadViewStats());
+      document.addEventListener("keydown", (event) => { if (event.key === "Escape" && viewStatsState.opened) setViewStatsOpen(false); });
+      viewStatsState.bound = true;
+    }
+    const sessionKey = config.viewStats.sessionKey || "sekai-chibi-studio-view-recorded";
+    try {
+      if (!sessionStorage.getItem(sessionKey)) {
+        sessionStorage.setItem(sessionKey, "1");
+        const now = new Date();
+        await Promise.allSettled([
+          incrementCounter(config.viewStats.counter),
+          incrementCounter(statsBucket("hour", now)),
+          incrementCounter(statsBucket("day", now)),
+        ]);
+      }
+    } catch (error) {
+      console.warn("View statistics increment unavailable", error);
+    }
+    loadViewStats();
+  }
+
   function setBusy(busy) {
     state.loading = busy;
     dom.character.disabled = busy;
     dom.costume.disabled = busy || !state.catalog.size;
     dom.action.disabled = busy || !state.current;
-    [dom.eyes, dom.brows, dom.mouth, dom.cheeks, dom.effect]
-      .forEach((element) => { element.disabled = busy || !state.current || element.options.length <= 1; });
+    [dom.action]
+      .forEach((element) => { element.disabled = busy || !state.current; });
     [dom.background, dom.transparent, dom.scale, dom.offsetY]
       .forEach((element) => { element.disabled = busy || !state.current; });
     dom.check.disabled = busy;
@@ -147,6 +323,7 @@
     dom.downloadGif.disabled = busy || !state.current;
     dom.gifFps.disabled = busy || !state.current;
     setComponentControlsDisabled(busy || state.componentCatalogLoading);
+    setFaceControlsDisabled(busy);
     if (busy && !dom.canvasArea?.classList.contains("is-export")) {
       setVisualState(state.current ? "working" : "loading", {
         character: state.current?.character.key,
@@ -274,7 +451,12 @@
     }).sort((left, right) => left.value.localeCompare(right.value, undefined, { numeric: true }));
     return {
       eyes, brows: groupFaceEntries(entries, "F_eyebrow", sex), mouth: groupFaceEntries(entries, "F_mouth", sex), cheeks, effect,
-      slots: { cheeks: [...new Set(cheeks.flatMap((choice) => choice.targets.map((target) => target.slotName)))], effect: [...new Set(effects.map((entry) => entry.slotName))] },
+      slots: {
+        face: [...new Set([...eyes, ...brows, ...mouth, ...cheeks, ...effect]
+          .flatMap((choice) => choice.targets.map((target) => target.slotName)))],
+        cheeks: [...new Set(cheeks.flatMap((choice) => choice.targets.map((target) => target.slotName)))],
+        effect: [...new Set(effects.map((entry) => entry.slotName))],
+      },
     };
   }
 
@@ -292,6 +474,20 @@
     populateFaceSelect(dom.mouth, current.face.mouth, "default", state.face.mouth);
     populateFaceSelect(dom.cheeks, current.face.cheeks, "none", state.face.cheeks);
     populateFaceSelect(dom.effect, current.face.effect, "none", state.face.effect);
+    setFaceControlsDisabled(state.loading);
+  }
+
+  function setFaceControlsDisabled(disabled) {
+    const blocked = disabled || Boolean(state.current && isFaceOverrideBlocked(state.current));
+    for (const category of FACE_CATEGORIES) {
+      const select = dom[category];
+      select.disabled = blocked || select.options.length <= 1;
+    }
+    if (dom.faceStatus) {
+      dom.faceStatus.textContent = state.current && isFaceOverrideBlocked(state.current)
+        ? "反向服装或背面动作不会显示正面表情覆盖。 / Front-face overrides are hidden."
+        : "";
+    }
   }
 
   function applyFaceCategory(category) {
@@ -308,11 +504,23 @@
   }
 
   function applyFaceOverrides() {
+    if (!state.current) return;
+    if (isFaceOverrideBlocked(state.current)) {
+      clearFaceAttachments();
+      return;
+    }
     applyFaceCategory("eyes");
     applyFaceCategory("brows");
     applyFaceCategory("mouth");
     applyFaceCategory("cheeks");
     applyFaceCategory("effect");
+  }
+
+  function clearFaceAttachments() {
+    if (!state.current) return;
+    for (const slotName of state.current.face.slots.face || []) {
+      state.current.display.skeleton.setAttachment(slotName, null);
+    }
   }
 
   const EXPERIMENTAL_OUTFIT_SLOTS = new Set([
@@ -331,7 +539,7 @@
   };
 
   function applyComponentOverrides() {
-    if (!state.current || !state.componentOverrides.length) return;
+    if (!state.current || isBackFacing(state.current) || !state.componentOverrides.length) return;
     for (const override of state.componentOverrides) {
       const slot = state.current.display.skeleton.findSlot(override.slotName);
       if (slot) slot.setAttachment(override.attachment);
@@ -396,7 +604,24 @@
     return EXPERIMENTAL_GROUPS.has(group) && isUsableExperimentalMesh(attachment);
   }
 
-  function isReversedCostume(costume) { return /_r$/i.test(costume?.bundle || ""); }
+  function isReversedCostume(costume) { return Boolean(costume?.isReversed) || /_r$/i.test(costume?.bundle || ""); }
+
+  function isBackFacingAction(action) {
+    return /(?:^|_)b(?:2)?$/i.test(String(action?.name || action || ""));
+  }
+
+  function isFaceOverrideBlocked(current = state.current) {
+    return Boolean(current && (isReversedCostume(current.costume) || isBackFacingAction(current.action)));
+  }
+
+  function isBackFacing(current = state.current) {
+    return Boolean(current && (isReversedCostume(current.costume) || isBackFacingAction(current.action)));
+  }
+
+  function resetFaceChoices() {
+    state.face = defaultFaceState();
+    for (const category of FACE_CATEGORIES) dom[category].value = state.face[category];
+  }
 
   function sourceCostume(character, costume) {
     return { ...costume, characterId: character.id, characterName: character.name };
@@ -546,9 +771,10 @@
   }
 
   function setComponentControlsDisabled(disabled) {
-    dom.componentOptions.querySelectorAll("select").forEach((select) => { select.disabled = disabled; });
-    dom.crossRigMode.disabled = disabled || !state.current || isReversedCostume(state.current.costume);
-    dom.resetComponents.disabled = disabled || state.componentSelections.size === 0;
+    const blocked = disabled || isBackFacing(state.current);
+    dom.componentOptions.querySelectorAll("select").forEach((select) => { select.disabled = blocked; });
+    dom.crossRigMode.disabled = blocked || !state.current || isReversedCostume(state.current.costume);
+    dom.resetComponents.disabled = blocked || state.componentSelections.size === 0;
   }
 
   function componentStatusText() {
@@ -563,6 +789,15 @@
     dom.componentGroup.hidden = false;
     dom.componentOptions.textContent = "";
     dom.crossRigMode.checked = state.crossRigMode;
+    if (isBackFacing(current)) {
+      state.componentSelections.clear();
+      state.componentOverrides = [];
+      dom.componentStatus.textContent = isReversedCostume(current.costume)
+        ? "反向版本保持完整服装，不显示正面组件覆盖。 / Reverse variants keep the full outfit."
+        : "背面动作保持完整服装，不显示正面组件覆盖。 / Back-facing actions keep the full outfit.";
+      setComponentControlsDisabled(true);
+      return;
+    }
     if (isReversedCostume(current.costume)) {
       dom.componentStatus.textContent = "反向版本会保持完整服装显示。";
       setComponentControlsDisabled(true);
@@ -628,7 +863,7 @@
   }
 
   async function applyComponentChoice(group, key) {
-    if (!state.current || state.loading || state.componentCatalogLoading) return;
+    if (!state.current || state.loading || state.componentCatalogLoading || isBackFacing(state.current)) return;
     const previousKey = state.componentSelections.get(group);
     if (key === NONE) state.componentSelections.delete(group);
     else state.componentSelections.set(group, key);
@@ -741,7 +976,9 @@
   function populateCostumes(characterId, selectedBundle) {
     const choices = state.catalog.get(characterId) || [];
     dom.costume.textContent = "";
-    for (const choice of choices) option(dom.costume, choice.bundle, choice.label);
+    for (const choice of choices) {
+      option(dom.costume, choice.bundle, choice.label);
+    }
     dom.costume.value = selectedBundle || choices[0]?.bundle || "";
     dom.costume.disabled = choices.length < 2 || state.loading;
   }
@@ -907,6 +1144,7 @@
          character, costume, display, skeletonData, face: buildFaceCatalog(skeletonData, character.sex),
          actions, action, entry: null, components: [],
        };
+       if (isReversedCostume(costume)) state.crossRigMode = false;
        updateTransform();
        state.app.stage.addChild(display);
        seekCurrent(0);
@@ -935,7 +1173,15 @@
   function chooseAction() {
     if (!state.current || state.loading) return;
     state.current.action = selectedAction(state.current.actions, dom.action.value);
+    if (isBackFacing(state.current)) {
+      resetFaceChoices();
+      state.componentSelections.clear();
+      state.componentOverrides = [];
+    }
     seekCurrent(0);
+    refreshComponentControls(state.current, state.current.components);
+    setComponentControlsDisabled(false);
+    setFaceControlsDisabled(false);
     setVisualState("ready", {
       character: state.current.character.key,
       costume: state.current.costume.bundle,
@@ -946,9 +1192,19 @@
 
   function changeFace(category, select) {
     if (!state.current || state.loading) return;
+    if (isFaceOverrideBlocked(state.current)) {
+      resetFaceChoices();
+      setFaceControlsDisabled(false);
+      return;
+    }
     state.face[category] = select.value;
     applyFaceOverrides();
     state.current.display.updateGeometry();
+  }
+
+  function onCostumeChange() {
+    if (!state.current || state.loading) return;
+    return loadCharacter(state.current.character.id, dom.costume.value);
   }
 
   function seekCurrent(time = 0, reset = true) {
@@ -1182,6 +1438,7 @@
   }
 
   async function startRenderer() {
+    initViewStats();
     if (!window.PIXI || !window.spine) {
       setState("fail", "浏览器运行时不可用 / Browser runtime is unavailable", "请检查 Pixi 与 Spine 运行时网址的网络访问，然后刷新页面。 / Check the configured runtime URLs, then reload.");
       return;
@@ -1198,7 +1455,7 @@
     });
     populateCharacterList();
     dom.character.addEventListener("change", () => loadCharacter(dom.character.value));
-    dom.costume.addEventListener("change", () => loadCharacter(dom.character.value, dom.costume.value));
+    dom.costume.addEventListener("change", onCostumeChange);
     dom.crossRigMode.addEventListener("change", onCrossRigModeChange);
     dom.resetComponents.addEventListener("click", resetComponentChoices);
     dom.action.addEventListener("change", chooseAction);
